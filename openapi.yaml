@@ -1,0 +1,231 @@
+openapi: 3.0.4
+info:
+  title: AskFake AI Server
+  description: | 
+    API Server에서 요청받은 request의 file extension에 따라 Deepfake Probability를 산출하고, 이를 결과 DB에 저장하는 과정입니다.
+  version: 1.0.12
+
+paths:
+  /process:
+    post:
+      summary: Detect API로부터의 request 알맞은 process로 전송
+      description: |
+        요청받은 파일 각 프로세서에 전달
+      tags:
+        - Main
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+      responses:
+        '200':
+          description: 요청 정상 수령 확인 return ( done )
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: done
+        '400':
+          description: Request Method Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
+        '405':
+          description: URL and ID 중 하나 이상 값 없을 시
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextRequired'
+        '415':
+          description: request가 이미지나 비디오 형식의 파일이 아닐 시
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unsupported'
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerError'
+
+  /predict-image:
+    post:
+      summary: Deepfake probability 산출 endpoint
+      description: |
+        Deepfake probability를 산출하여 DB에 해당 값을 저장하는 과정입니다.
+      tags:
+        - Image Processor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageRequest'
+      responses:
+        '200':
+          description: Deepfake probability 결과값 return
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: number
+                    format: float
+                    description: Update deepfake probability according to MongoDB ID
+                    example: 0.0139
+        '400':
+          description: 올바르지 않은 s3 파일 경로
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FetchError'
+        '415':
+          description: 얼굴 감지 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoFaces'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerError'
+                
+  /predict-video:
+    post:
+      summary: Deepfake probability 산출 endpoint
+      description: |
+        Deepfake probability를 산출하여 DB에 해당 값을 저장하는 과정입니다.
+      tags:
+        - Video Processor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoRequest'
+      responses:
+        '200':
+          description: Deepfake probability 결과값 return
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: number
+                    format: float
+                    description: Update deepfake probability according to MongoDB ID
+                    example: 0.3484
+        '400':
+          description: 올바르지 않은 s3 파일 경로
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FetchError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerError'
+
+components:
+  schemas:
+    ProcessRequest:
+      type: object
+      required:
+        - url
+        - id
+      properties:
+        url:
+          type: string
+          description: s3 bucket 내 image or video url
+          example: "(S3_BUCKET_FILE_PATH)"
+        id:
+          type: string
+          description: 결과값 저장용 MongoDB ID
+          example: "detect-0000000000000000000"
+    
+    ImageRequest:
+      type: object
+      required:
+        - url
+        - id
+      properties:
+        url:
+          type: string
+          description: s3 bucket 이미지 파일 경로
+          example: "https://(S3_BUCKET_ENDPOINT_N_BUCKET_NAME)/image.jpg"
+        id:
+          type: string
+          description: MongoDB image ID
+          example: "detect-0000000000000000000"
+          
+    VideoRequest:
+      type: object
+      required:
+        - url
+        - id
+      properties:
+        url:
+          type: string
+          description: s3 bucket 이미지 파일 경로
+          example: "https://(S3_BUCKET_ENDPOINT_N_BUCKET_NAME)/video.mp4"
+        id:
+          type: string
+          description: MongoDB image ID
+          example: "detect-0000000000000000000"
+    
+    InvalidRequest:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 요청 받을 시 에러
+          example: "Invalid request method"
+    ContextRequired:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 요청 내용에 url / id 하나이상 없음
+          example: "URL and ID are all required"
+    Unsupported:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 파일 형식이 이미지 / 비디오 가 아님
+          example: "Unsupported file type ( File must be image or video ! )"
+    ServerError:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Internal Server Error
+          example: "Error processing file"
+    NoFaces:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 얼굴 감지 실패 시
+          example: "No Faces Detected !"
+    FetchError:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 올바르지 않은 s3 파일 경로
+          example: "Error fetching file from WASABI"
